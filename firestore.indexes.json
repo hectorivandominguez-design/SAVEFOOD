@@ -1,0 +1,19 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "ORDERS",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "estadoPedido",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaExpiracionPago",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

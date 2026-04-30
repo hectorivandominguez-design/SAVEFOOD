@@ -1,0 +1,147 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/USERS/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return currentUserExists()
+        && get(/databases/$(database)/documents/USERS/$(request.auth.uid)).data.rol == 'ADMIN';
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isVisibleExpiringResource() {
+      return resource.data.estadoPublicacion in ['DISPONIBLE', 'AGOTADO'];
+    }
+
+    function orderBelongsToCurrentUser(orderId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/ORDERS/$(orderId))
+        && get(/databases/$(database)/documents/ORDERS/$(orderId)).data.userId == request.auth.uid;
+    }
+
+    function adminTargetUser(userId) {
+      return exists(/databases/$(database)/documents/USERS/$(userId))
+        && get(/databases/$(database)/documents/USERS/$(userId)).data.rol == 'ADMIN';
+    }
+
+    match /USERS/{userId} {
+      allow read: if isOwner(userId)
+        || isAdmin()
+        || (signedIn() && resource.data.rol == 'ADMIN');
+
+      allow create: if isOwner(userId)
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.rol == 'CLIENTE'
+        && request.resource.data.email is string;
+
+      allow update: if isAdmin()
+        || (
+          isOwner(userId)
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.rol == resource.data.rol
+          && request.resource.data.estadoCuenta == resource.data.estadoCuenta
+        );
+
+      allow delete: if false;
+    }
+
+    match /PRODUCTS_CATALOG/{productId} {
+      allow read: if isAdmin();
+
+      allow create: if isAdmin()
+        && request.resource.data.creadoPorAdminId == request.auth.uid;
+
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /EXPIRING_PRODUCTS/{expiringProductId} {
+      allow read: if isAdmin() || isVisibleExpiringResource();
+
+      allow create: if isAdmin()
+        && request.resource.data.publicadoPorAdminId == request.auth.uid;
+
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /ORDERS/{orderId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+
+      allow create, update, delete: if false;
+    }
+
+    match /ORDER_ITEMS/{orderItemId} {
+      allow read: if isAdmin() || orderBelongsToCurrentUser(resource.data.orderId);
+
+      allow create, update, delete: if false;
+    }
+
+    match /NOTIFICATIONS/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['leida']);
+
+      allow create, delete: if false;
+    }
+
+    match /AUDIT_LOGS/{logId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /INVENTORY_MOVEMENTS/{movementId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /FEEDBACK_REVIEWS/{feedbackId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && exists(/databases/$(database)/documents/ORDERS/$(request.resource.data.orderId))
+        && get(/databases/$(database)/documents/ORDERS/$(request.resource.data.orderId)).data.userId == request.auth.uid
+        && get(/databases/$(database)/documents/ORDERS/$(request.resource.data.orderId)).data.estadoPedido == 'ENTREGADO';
+
+      allow update, delete: if false;
+    }
+
+    match /STORE_CONFIG/{configId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /PAYMENTS/{paymentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /ANALYTICS_DAILY/{analyticsId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /ANALYTICS_PRODUCTS/{analyticsProductId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

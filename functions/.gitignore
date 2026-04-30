@@ -1,0 +1,12 @@
+# Dependencias del backend
+node_modules/
+
+# Variables de entorno locales
+.env
+.env.*
+!.env.example
+
+# Logs y artefactos locales
+*.log
+firebase-debug.log
+.firebase/
